@@ -1,6 +1,6 @@
 # Enterprise Pharma Clinical Data Engineering Pipeline
 
-An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Analytics (designed for Amgen Data Engineering standards).
+An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Analytics.
 
 ## Pipeline Architecture Overview
 ```
