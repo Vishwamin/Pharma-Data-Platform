@@ -2,6 +2,10 @@
 
 An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Analytics.
 
+---
+
+## 🏛 Architecture Overview (Medallion Architecture)
+
 ```
                        [ RAW CSV SOURCE FILES ]
                                   │
@@ -15,6 +19,12 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    ┌──────────────────────────────┐
                    │ Phase 2: BRONZE LAYER        │
                    │ Raw Storage (PostgreSQL DB)  │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 3: DATA VALIDATION     │
+                   │ Quality Rules & Quarantine   │
                    └──────────────────────────────┘
 ```
 
@@ -49,6 +59,18 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
+### 🔹 PHASE 3: Data Validation & Data Quality Rules Engine
+- **Goal**: Build an automated Data Quality Rules Engine to audit Bronze records, enforce business logic, standardize categoricals, deduplicate records, and isolate corrupted data into a Quarantine table.
+- **What We Built**:
+  - `src/models_quarantine.py`: `QuarantineClinicalTrials` ORM table schema storing invalid records along with precise violation reasons (`violation_reasons`).
+  - `src/validation.py`: Rule-based validation engine applying null checks, age bounds validation (18-100), dosage range limits (0-500mg), date chronological sanity (`end_date >= start_date`), categorical standardization (`US` ➔ `USA`, `M` ➔ `Male`), and deduplication (`patient_id` + `trial_id`).
+- **Why We Did It**:
+  - Invalid data must never be silently discarded in production pipelines. Quarantining corrupted records allows data engineering and quality teams to audit source errors and debug upstream issues.
+  - Standardizes dirty categorical variants into uniform values before downstream analytical aggregations.
+  - Deduplication prevents skewed metrics and duplicate counting in downstream business reporting.
+
+---
+
 ## 📂 Project Directory Structure
 
 ```
@@ -69,7 +91,9 @@ pharma-data-pipeline/
 │   ├── ingest.py               # Raw file ingestion module
 │   ├── load_bronze.py          # Bronze pipeline loader
 │   ├── logger.py               # Production logging utility
-│   └── models_bronze.py        # SQLAlchemy Bronze layer ORM model
+│   ├── models_bronze.py        # SQLAlchemy Bronze layer ORM model
+│   ├── models_quarantine.py    # SQLAlchemy Quarantine table ORM model
+│   └── validation.py           # Data Quality Rules & Quarantine Engine
 ├── tests/                      # Unit & pipeline test suites
 ├── .env.example
 ├── .gitignore
@@ -94,4 +118,9 @@ pharma-data-pipeline/
 3. **Ingest & Load Raw Data into Bronze Database (Phase 2)**:
    ```powershell
    python src/load_bronze.py
+   ```
+
+4. **Run Data Validation & Quality Quarantine Engine (Phase 3)**:
+   ```powershell
+   python src/validation.py
    ```
