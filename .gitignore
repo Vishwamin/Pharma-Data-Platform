@@ -7,9 +7,12 @@ env/
 __pycache__/
 *.py[cod]
 
-# Logs & Data
+# Logs & Databases
 logs/*.log
 !logs/.gitkeep
+*.db
+*.sqlite
+data/*.db
 
 # Environment variables
 .env
