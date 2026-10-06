@@ -25,6 +25,12 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    ┌──────────────────────────────┐
                    │ Phase 3: DATA VALIDATION     │
                    │ Quality Rules & Quarantine   │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 3.5: SQL ANALYTICS     │
+                   │ PostgreSQL Engineering Engine│
                    └──────────────────────────────┘
 ```
 
@@ -39,10 +45,6 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
   - `src/logger.py`: Production dual-handler stream and persistent file logger (`logs/pipeline.log`).
   - `src/generate_synthetic_data.py`: Synthetic dataset generator producing clinical records with intentional data quality issues (nulls, duplicates, invalid ages, date errors, malformed dosages).
   - `src/ingest.py`: Raw CSV string loader that verifies file existence, size, and structural schema presence.
-- **Why We Did It**:
-  - Prevents hardcoded local paths and database credentials.
-  - Ensures raw file integrity is audited before downstream data transformations run.
-  - Preserves exact source strings to prevent silent data corruption during ingestion.
 
 ---
 
@@ -52,10 +54,6 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
   - `src/database.py`: SQLAlchemy engine management, session pooling, health checks, and database fallback handler.
   - `src/models_bronze.py`: `BronzeClinicalTrials` ORM table schema preserving raw string data and audit metadata (`ingestion_timestamp`, `source_file_name`).
   - `src/load_bronze.py`: Ingestion pipeline loading raw CSV string payloads into the Bronze database table in batch chunks.
-- **Why We Did It**:
-  - The Bronze layer serves as an immutable raw landing zone preserving full data lineage.
-  - Storing fields as strings in Bronze ensures dirty records land successfully without throwing database level type-casting errors.
-  - Provides a surrogate primary key (`raw_id`) so every raw record is uniquely addressable regardless of natural key quality.
 
 ---
 
@@ -64,10 +62,15 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 - **What We Built**:
   - `src/models_quarantine.py`: `QuarantineClinicalTrials` ORM table schema storing invalid records along with precise violation reasons (`violation_reasons`).
   - `src/validation.py`: Rule-based validation engine applying null checks, age bounds validation (18-100), dosage range limits (0-500mg), date chronological sanity (`end_date >= start_date`), categorical standardization (`US` ➔ `USA`, `M` ➔ `Male`), and deduplication (`patient_id` + `trial_id`).
-- **Why We Did It**:
-  - Invalid data must never be silently discarded in production pipelines. Quarantining corrupted records allows data engineering and quality teams to audit source errors and debug upstream issues.
-  - Standardizes dirty categorical variants into uniform values before downstream analytical aggregations.
-  - Deduplication prevents skewed metrics and duplicate counting in downstream business reporting.
+
+---
+
+### 🔹 PHASE 3.5: SQL Analytics & PostgreSQL Engineering Engine
+- **Goal**: Master production SQL and relational database engineering using our active PostgreSQL `pharma_clinical_db` database across 16 core data engineering dimensions.
+- **What We Built**:
+  - Modular SQL Scripts (`sql/01_basic_queries.sql` to `sql/09_pharma_clinical_analytics.sql`).
+  - `src/run_sql_analytics.py`: Automated Python runner executing SQL analytics modules against PostgreSQL.
+  - Advanced Querying: Window functions (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LAG`, `LEAD`), CTEs, CASE statements, NULL profiling, B-Tree Indexing, and Query Optimization (`EXPLAIN ANALYZE`).
 
 ---
 
@@ -84,6 +87,16 @@ pharma-data-pipeline/
 │   └── pharma_clinical_db.db        # Local database storage
 ├── logs/
 │   └── pipeline.log            # Persistent audit logs
+├── sql/
+│   ├── 01_basic_queries.sql
+│   ├── 02_aggregations_and_grouping.sql
+│   ├── 03_case_statements.sql
+│   ├── 04_joins_and_relational.sql
+│   ├── 05_subqueries_and_ctes.sql
+│   ├── 06_window_functions.sql
+│   ├── 07_data_quality_and_deduplication.sql
+│   ├── 08_indexing_transactions_optimization.sql
+│   └── 09_pharma_clinical_analytics.sql
 ├── src/
 │   ├── __init__.py
 │   ├── database.py             # SQLAlchemy DB engine & connection manager
@@ -93,6 +106,7 @@ pharma-data-pipeline/
 │   ├── logger.py               # Production logging utility
 │   ├── models_bronze.py        # SQLAlchemy Bronze layer ORM model
 │   ├── models_quarantine.py    # SQLAlchemy Quarantine table ORM model
+│   ├── run_sql_analytics.py    # SQL analytics execution engine
 │   └── validation.py           # Data Quality Rules & Quarantine Engine
 ├── tests/                      # Unit & pipeline test suites
 ├── .env.example
@@ -123,4 +137,9 @@ pharma-data-pipeline/
 4. **Run Data Validation & Quality Quarantine Engine (Phase 3)**:
    ```powershell
    python src/validation.py
+   ```
+
+5. **Run PostgreSQL Analytics Engine (Phase 3.5)**:
+   ```powershell
+   python src/run_sql_analytics.py
    ```
