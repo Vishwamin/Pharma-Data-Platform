@@ -31,6 +31,12 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    ┌──────────────────────────────┐
                    │ Phase 3.5: SQL ANALYTICS     │
                    │ PostgreSQL Engineering Engine│
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 4: SILVER LAYER        │
+                   │ PySpark Transformations      │
                    └──────────────────────────────┘
 ```
 
@@ -74,6 +80,14 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
+### 🔹 PHASE 4: PySpark Transformations & Silver Layer Conformed Landing
+- **Goal**: Process validated clinical trial data through PySpark DataFrame transformations to build the Silver Layer in Medallion Architecture.
+- **What We Built**:
+  - `src/models_silver.py`: `SilverClinicalTrials` ORM table schema with enforced datatypes (Integer `age`, Float `dosage`, SQL Date `start_date`/`end_date`, derived `treatment_duration_days`).
+  - `src/spark_silver.py`: PySpark DataFrame transformation engine performing type casting, window deduplication (`Window.partitionBy`), feature calculation (`datediff`), loading `silver_clinical_trials` PostgreSQL table, and exporting partitioned Parquet data lake files.
+
+---
+
 ## 📂 Project Directory Structure
 
 ```
@@ -84,6 +98,8 @@ pharma-data-pipeline/
 ├── data/
 │   ├── raw/
 │   │   └── clinical_trials_raw.csv  # Raw landed data
+│   ├── silver/
+│   │   └── clinical_trials_parquet/ # Partitioned Parquet Data Lake
 │   └── pharma_clinical_db.db        # Local database storage
 ├── logs/
 │   └── pipeline.log            # Persistent audit logs
@@ -106,7 +122,9 @@ pharma-data-pipeline/
 │   ├── logger.py               # Production logging utility
 │   ├── models_bronze.py        # SQLAlchemy Bronze layer ORM model
 │   ├── models_quarantine.py    # SQLAlchemy Quarantine table ORM model
+│   ├── models_silver.py        # SQLAlchemy Silver layer ORM model
 │   ├── run_sql_analytics.py    # SQL analytics execution engine
+│   ├── spark_silver.py         # PySpark Silver Transformation Engine
 │   └── validation.py           # Data Quality Rules & Quarantine Engine
 ├── tests/                      # Unit & pipeline test suites
 ├── .env.example
@@ -142,4 +160,9 @@ pharma-data-pipeline/
 5. **Run PostgreSQL Analytics Engine (Phase 3.5)**:
    ```powershell
    python src/run_sql_analytics.py
+   ```
+
+6. **Run PySpark Transformations to Silver Layer (Phase 4)**:
+   ```powershell
+   python src/spark_silver.py
    ```
