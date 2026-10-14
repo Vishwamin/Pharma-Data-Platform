@@ -37,6 +37,14 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    ┌──────────────────────────────┐
                    │ Phase 4: SILVER LAYER        │
                    │ PySpark Transformations      │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 5: GOLD LAYER          │
+                   │ Star Schema Analytical Model │
+                   │  dim_patient  dim_trial      │
+                   │  dim_drug     fact_outcomes  │
                    └──────────────────────────────┘
 ```
 
@@ -88,6 +96,24 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
+### 🔹 PHASE 5: Gold Layer — Star Schema Analytical Modeling
+- **Goal**: Transform the Silver conformed data into a full analytical star schema (Gold Layer) — the final tier of the Medallion Architecture, optimised for BI tools, dashboards, and data science consumption.
+- **What We Built**:
+  - `src/models_gold.py`: Four SQLAlchemy ORM models forming the star schema:
+    - `DimPatient` — Patient dimension (patient_key, patient_id, age, gender, country)
+    - `DimTrial` — Clinical trial dimension (trial_key, trial_id, treatment, dates, duration)
+    - `DimDrug` — Drug dimension (drug_key, drug_id, drug_name)
+    - `FactClinicalOutcomes` — Central fact table with FK references to all dimensions, numeric measures (dosage, treatment_duration_days), and derived analytical flags (outcome_binary, outcome_category)
+  - `src/build_gold.py`: End-to-end Gold layer pipeline:
+    - Reads from `silver_clinical_trials` table
+    - Builds and loads all 4 dimension and fact tables
+    - Resolves surrogate foreign keys via Pandas merge (equivalent to SQL JOIN)
+    - Derives `outcome_binary` (1/0) and `outcome_category` (Positive/Negative/Neutral) for analytics
+    - Exports all Gold tables as Parquet files under `data/gold/`
+    - Prints analytical summary: success rates, top countries, drug performance
+
+---
+
 ## 📂 Project Directory Structure
 
 ```
@@ -100,6 +126,11 @@ pharma-data-pipeline/
 │   │   └── clinical_trials_raw.csv  # Raw landed data
 │   ├── silver/
 │   │   └── clinical_trials_parquet/ # Partitioned Parquet Data Lake
+│   ├── gold/
+│   │   ├── dim_patient.parquet           # Patient dimension
+│   │   ├── dim_trial.parquet             # Trial dimension
+│   │   ├── dim_drug.parquet              # Drug dimension
+│   │   └── fact_clinical_outcomes.parquet # Central fact table
 │   └── pharma_clinical_db.db        # Local database storage
 ├── logs/
 │   └── pipeline.log            # Persistent audit logs
@@ -123,8 +154,10 @@ pharma-data-pipeline/
 │   ├── models_bronze.py        # SQLAlchemy Bronze layer ORM model
 │   ├── models_quarantine.py    # SQLAlchemy Quarantine table ORM model
 │   ├── models_silver.py        # SQLAlchemy Silver layer ORM model
+│   ├── models_gold.py          # SQLAlchemy Gold layer ORM models (star schema)
 │   ├── run_sql_analytics.py    # SQL analytics execution engine
 │   ├── spark_silver.py         # PySpark Silver Transformation Engine
+│   ├── build_gold.py           # Gold Layer Star Schema Build Pipeline
 │   └── validation.py           # Data Quality Rules & Quarantine Engine
 ├── tests/                      # Unit & pipeline test suites
 ├── .env.example
@@ -165,4 +198,9 @@ pharma-data-pipeline/
 6. **Run PySpark Transformations to Silver Layer (Phase 4)**:
    ```powershell
    python src/spark_silver.py
+   ```
+
+7. **Build Gold Layer Star Schema (Phase 5)**:
+   ```powershell
+   python src/build_gold.py
    ```

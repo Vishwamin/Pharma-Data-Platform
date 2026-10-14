@@ -13,6 +13,8 @@ logs/*.log
 *.db
 *.sqlite
 data/*.db
+data/silver/
+data/gold/
 
 # Environment variables
 .env
