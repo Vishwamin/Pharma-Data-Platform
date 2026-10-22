@@ -45,6 +45,13 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    │ Star Schema Analytical Model │
                    │  dim_patient  dim_trial      │
                    │  dim_drug     fact_outcomes  │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 6: PIPELINE TESTING    │
+                   │ pytest Unit & Data Tests     │
+                   │  182 tests | 2.40s runtime   │
                    └──────────────────────────────┘
 ```
 
@@ -114,7 +121,38 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
-## 📂 Project Directory Structure
+### 🔹 PHASE 6: Pipeline Testing — pytest Unit & Data Quality Tests
+- **Goal**: Build a comprehensive automated test suite that validates every critical piece of the pipeline works correctly — without touching the database. Industry-standard practice before deploying any data pipeline.
+- **What We Built**:
+  - `tests/conftest.py`: Shared pytest fixtures (sample records, Silver DataFrame) available to all test files automatically
+  - `tests/test_validation.py`: 80+ tests for the data validation engine (Phase 3):
+    - Valid record acceptance (no false positives)
+    - Age boundary conditions (18–100), numeric type casting
+    - Dosage range validation (0–500mg), malformed value rejection
+    - Mandatory field null checks (parametrized over all 6 fields)
+    - Date format validation, chronological order enforcement
+    - Categorical standardization — gender & country mapping (parametrized, 25+ variants)
+    - Full batch of invalid records all rejected
+  - `tests/test_build_gold.py`: 50+ tests for Gold layer helper functions (Phase 5):
+    - `_derive_outcome_binary`: all positive/negative outcomes, case-insensitivity, None/empty edge cases
+    - `_derive_outcome_category`: Positive/Negative/Neutral mapping, all categories valid
+    - `_derive_drug_name`: known DRUG-N IDs, legacy D-00x IDs, unknown fallback, whitespace stripping
+    - DataFrame-level integration tests: deduplication counts, column creation, fact row count
+  - `tests/test_config.py`: 25+ project structure & configuration tests:
+    - Config class attributes, URI format validation, Path object types
+    - Required columns completeness, no duplicates
+    - All critical source files and directories exist on disk
+  - `tests/test_data_ingestion.py`: Raw data file integrity tests (Phase 1 output):
+    - File existence, non-empty, correct extension
+    - Schema: all required columns present, no unnamed headers
+    - Row count in expected range (900–1200)
+    - patient_id format, anomaly presence confirmation
+  - `src/run_tests.py`: Convenience script to execute full test suite
+  - `pytest.ini`: pytest configuration (test discovery, verbosity, log level)
+- **Results**: **182 tests, 0 failures, completed in 2.40 seconds**
+
+---
+
 
 ```
 pharma-data-pipeline/
@@ -156,10 +194,18 @@ pharma-data-pipeline/
 │   ├── models_silver.py        # SQLAlchemy Silver layer ORM model
 │   ├── models_gold.py          # SQLAlchemy Gold layer ORM models (star schema)
 │   ├── run_sql_analytics.py    # SQL analytics execution engine
+│   ├── run_tests.py            # Phase 6 test suite runner
 │   ├── spark_silver.py         # PySpark Silver Transformation Engine
 │   ├── build_gold.py           # Gold Layer Star Schema Build Pipeline
 │   └── validation.py           # Data Quality Rules & Quarantine Engine
-├── tests/                      # Unit & pipeline test suites
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py             # Shared pytest fixtures
+│   ├── test_validation.py      # Phase 3: Validation engine tests (80+ tests)
+│   ├── test_build_gold.py      # Phase 5: Gold layer function tests (50+ tests)
+│   ├── test_config.py          # Config & project structure tests (25+ tests)
+│   └── test_data_ingestion.py  # Raw data ingestion tests (25+ tests)
+├── pytest.ini                  # pytest configuration
 ├── .env.example
 ├── .gitignore
 ├── README.md                   # Project documentation
@@ -203,4 +249,16 @@ pharma-data-pipeline/
 7. **Build Gold Layer Star Schema (Phase 5)**:
    ```powershell
    python src/build_gold.py
+   ```
+
+8. **Run Full Pipeline Test Suite (Phase 6)**:
+   ```powershell
+   python src/run_tests.py
+   ```
+   Or run pytest directly:
+   ```powershell
+   pytest tests/ -v
+   pytest tests/test_validation.py -v        # validation tests only
+   pytest tests/test_build_gold.py -v        # gold layer tests only
+   pytest tests/ -v -k "TestAgeValidation"   # run one test class
    ```
