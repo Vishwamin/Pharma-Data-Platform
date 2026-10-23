@@ -109,3 +109,51 @@ def sample_silver_df() -> pd.DataFrame:
         "outcome":                ["Completed", "Withdrawn", "Effective", "Adverse Event", "Completed", "Non-Responsive"],
         "treatment_duration_days":[89, 119, 120, 122, 89, 120],
     })
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """
+    Session-level fixture: ensures that all tables (including Gold Star Schema
+    and PipelineRun metadata store) exist in the target database.
+    If running against SQLite fallback and tables are empty, seeds minimal
+    records so API and analytical tests pass offline.
+    """
+    from src.database import engine, Base
+    from src.models_bronze import BronzeClinicalTrials
+    from src.models_quarantine import QuarantineClinicalTrials
+    from src.models_silver import SilverClinicalTrials
+    from src.models_gold import DimPatient, DimTrial, DimDrug, FactClinicalOutcomes
+    from src.models_pipeline_run import PipelineRun
+    from sqlalchemy import text
+
+    # Ensure all tables exist
+    Base.metadata.create_all(bind=engine)
+
+    # Check if fact_clinical_outcomes has data; if empty, seed minimal data
+    with engine.connect() as conn:
+        try:
+            count = conn.execute(text("SELECT COUNT(*) FROM fact_clinical_outcomes")).scalar()
+        except Exception:
+            count = 0
+
+    if "sqlite" in str(engine.url):
+        # Seed minimal dimensions for SQLite fallback if not present
+        with engine.connect() as conn:
+            conn.execute(text("INSERT OR IGNORE INTO dim_patient (patient_key, patient_id, age, gender, country) VALUES (1, 'P1001', 35, 'Male', 'USA')"))
+            conn.execute(text("INSERT OR IGNORE INTO dim_trial (trial_key, trial_id, treatment, start_date, end_date, treatment_duration_days) VALUES (1, 'CT-101', 'Drug_A_10mg', '2023-01-01', '2023-04-01', 90)"))
+            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (1, 'DRUG-1', 'Investigational Drug Alpha')"))
+            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (2, 'DRUG-2', 'Investigational Drug Beta')"))
+            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (3, 'DRUG-3', 'Investigational Drug Gamma')"))
+            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (4, 'DRUG-4', 'Investigational Drug Delta')"))
+            conn.execute(text(
+                "INSERT OR IGNORE INTO fact_clinical_outcomes "
+                "(fact_id, patient_key, trial_key, drug_key, patient_id, trial_id, drug_id, dosage, treatment_duration_days, outcome, outcome_binary, outcome_category) "
+                "VALUES (1, 1, 1, 1, 'P1001', 'CT-101', 'DRUG-1', 100.0, 90, 'Completed', 1, 'Positive')"
+            ))
+            conn.execute(text(
+                "INSERT OR IGNORE INTO pipeline_runs "
+                "(run_id, run_name, status, triggered_by, duration_seconds) "
+                "VALUES (1, 'test_initial_run', 'SUCCESS', 'test', 5.0)"
+            ))
+            conn.commit()

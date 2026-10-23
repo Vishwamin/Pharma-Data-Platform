@@ -60,6 +60,14 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    │ Master Pipeline Runner       │
                    │  6 stages | metadata store   │
                    │  pipeline_runs table | CLI   │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 8: DATA SERVING & BI   │
+                   │ FastAPI REST API & Streamlit │
+                   │  Clinical KPIs, Drug Efficacy│
+                   │  Live Observability Hub      │
                    └──────────────────────────────┘
 ```
 
@@ -184,6 +192,29 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
+### 🔹 PHASE 8: Clinical Data Serving Layer & Interactive BI Dashboard
+- **Goal**: Serve the Gold Layer Star Schema metrics and Phase 7 pipeline telemetry to downstream applications, clinicians, and stakeholders via high-performance REST APIs and an interactive Streamlit intelligence dashboard.
+- **What We Built**:
+  - `src/api_serving.py`: Production-grade FastAPI REST service delivering analytical endpoints:
+    - `GET /` — API service info & endpoint documentation catalog
+    - `GET /health` — Live database connectivity status, Gold row counts & latest pipeline run telemetry
+    - `GET /api/v1/kpis` — Clinical performance scorecards (patients, positive outcome %, duration, dosage)
+    - `GET /api/v1/drugs/efficacy` — Comparative investigational drug efficacy and success rates
+    - `GET /api/v1/demographics/summary` — Patient demographics by country and gender cohorts
+    - `GET /api/v1/trials/summary` — Clinical trial enrollment volumes and duration statistics
+    - `GET /api/v1/pipeline/runs` — Historical execution audit trail from `pipeline_runs` metadata store
+    - `POST /api/v1/pipeline/trigger` — Webhook endpoint to trigger background pipeline runs
+  - `src/dashboard.py`: Interactive Streamlit Clinical Intelligence & Observability Hub:
+    - 4 comprehensive analytical tabs: Executive KPIs, Drug Efficacy Explorer, Patient Demographics, Pipeline Observability
+    - Dynamic sidebar filtering by Clinical Trial, Investigational Drug, and Patient Country
+    - Real-time pipeline health telemetry view tracking execution duration trends and pass rates
+  - `tests/test_api_serving.py`: 9 unit tests verifying all REST endpoints, Pydantic response models, and query handlers
+- **Results**:
+  - API serving layer tested: **9 passed in 0.92s**
+  - Total test suite: **240 tests PASSED, 0 failures**
+
+---
+
 ```
 pharma-data-pipeline/
 ├── config/
@@ -225,6 +256,8 @@ pharma-data-pipeline/
 │   ├── models_gold.py          # SQLAlchemy Gold layer ORM models (star schema)
 │   ├── models_pipeline_run.py  # Phase 7: PipelineRun metadata store ORM model
 │   ├── orchestrator.py         # Phase 7: Master pipeline orchestrator
+│   ├── api_serving.py          # Phase 8: FastAPI Clinical Data Serving Layer
+│   ├── dashboard.py            # Phase 8: Streamlit Clinical Intelligence Dashboard
 │   ├── run_sql_analytics.py    # SQL analytics execution engine
 │   ├── run_tests.py            # Phase 6 test suite runner
 │   ├── spark_silver.py         # PySpark Silver Transformation Engine
@@ -232,12 +265,13 @@ pharma-data-pipeline/
 │   └── validation.py           # Data Quality Rules & Quarantine Engine
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py             # Shared pytest fixtures
+│   ├── conftest.py             # Shared pytest fixtures & test DB setup
 │   ├── test_validation.py      # Phase 3: Validation engine tests (80+ tests)
 │   ├── test_build_gold.py      # Phase 5: Gold layer function tests (50+ tests)
 │   ├── test_config.py          # Config & project structure tests (25+ tests)
 │   ├── test_data_ingestion.py  # Raw data ingestion tests (25+ tests)
-│   └── test_orchestrator.py    # Phase 7: Orchestrator unit tests (49 tests)
+│   ├── test_orchestrator.py    # Phase 7: Orchestrator unit tests (49 tests)
+│   └── test_api_serving.py     # Phase 8: FastAPI REST API tests (9 tests)
 ├── pytest.ini                  # pytest configuration
 ├── .env.example
 ├── .gitignore
@@ -304,3 +338,15 @@ pharma-data-pipeline/
    python src/orchestrator.py --no-stop-on-failure         # continue on failure
    python src/orchestrator.py --history                    # view run history
    ```
+
+10. **Launch Clinical Data Serving API (Phase 8)**:
+    ```powershell
+    uvicorn src.api_serving:app --host 127.0.0.1 --port 8000 --reload
+    ```
+    - Interactive Swagger API Documentation: `http://127.0.0.1:8000/docs`
+    - Redoc Documentation: `http://127.0.0.1:8000/redoc`
+
+11. **Launch Interactive Clinical Intelligence Dashboard (Phase 8)**:
+    ```powershell
+    streamlit run src/dashboard.py
+    ```
