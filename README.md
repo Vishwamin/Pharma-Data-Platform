@@ -52,6 +52,14 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    │ Phase 6: PIPELINE TESTING    │
                    │ pytest Unit & Data Tests     │
                    │  182 tests | 2.40s runtime   │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 7: ORCHESTRATION       │
+                   │ Master Pipeline Runner       │
+                   │  6 stages | metadata store   │
+                   │  pipeline_runs table | CLI   │
                    └──────────────────────────────┘
 ```
 
@@ -153,6 +161,28 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
+### 🔹 PHASE 7: Pipeline Orchestration — Master End-to-End Runner
+- **Goal**: Chain all pipeline phases into a single automated, observable, end-to-end orchestrated run with metadata tracking, health dashboard, CLI control, and per-run history stored in PostgreSQL.
+- **What We Built**:
+  - `src/models_pipeline_run.py`: `PipelineRun` ORM model — the pipeline metadata store (`pipeline_runs` table). Records every run: status, timing, stage results (planned/completed/failed), per-stage record counts, test pass/fail counts, and full error tracebacks on failure.
+  - `src/orchestrator.py`: Master pipeline orchestrator with:
+    - `STAGE_REGISTRY` — declarative registry mapping stage keys to labels, descriptions, and runner functions
+    - Per-stage runner functions (`_run_generate`, `_run_bronze`, `_run_validate`, `_run_silver`, `_run_gold`, `_run_tests`)
+    - `run_pipeline()` — creates a RUNNING run record, executes stages sequentially with per-stage timing, saves final status (SUCCESS / PARTIAL / FAILED) to DB
+    - `_print_health_dashboard()` — formatted terminal dashboard: stage results, timings, and all pipeline metrics
+    - `_print_run_history()` — shows last N runs from the `pipeline_runs` table
+    - CLI: `--stages`, `--name`, `--triggered-by`, `--no-stop-on-failure`, `--history` flags
+  - `tests/test_orchestrator.py`: 49 unit tests for orchestrator logic (no DB required):
+    - STAGE_REGISTRY completeness and structure validation
+    - DEFAULT_STAGES ordering (generate → bronze → validate → silver → gold → test)
+    - PipelineRun ORM model column presence
+- **Results**:
+  - Full pipeline (6 stages): **SUCCESS in 6.92 seconds**
+  - Selective run (`--stages gold,test`): **SUCCESS in 2.13 seconds**
+  - 2 pipeline runs recorded to `pipeline_runs` metadata table
+  - Total test suite: **231 tests PASSED, 0 failures**
+
+---
 
 ```
 pharma-data-pipeline/
@@ -193,6 +223,8 @@ pharma-data-pipeline/
 │   ├── models_quarantine.py    # SQLAlchemy Quarantine table ORM model
 │   ├── models_silver.py        # SQLAlchemy Silver layer ORM model
 │   ├── models_gold.py          # SQLAlchemy Gold layer ORM models (star schema)
+│   ├── models_pipeline_run.py  # Phase 7: PipelineRun metadata store ORM model
+│   ├── orchestrator.py         # Phase 7: Master pipeline orchestrator
 │   ├── run_sql_analytics.py    # SQL analytics execution engine
 │   ├── run_tests.py            # Phase 6 test suite runner
 │   ├── spark_silver.py         # PySpark Silver Transformation Engine
@@ -204,7 +236,8 @@ pharma-data-pipeline/
 │   ├── test_validation.py      # Phase 3: Validation engine tests (80+ tests)
 │   ├── test_build_gold.py      # Phase 5: Gold layer function tests (50+ tests)
 │   ├── test_config.py          # Config & project structure tests (25+ tests)
-│   └── test_data_ingestion.py  # Raw data ingestion tests (25+ tests)
+│   ├── test_data_ingestion.py  # Raw data ingestion tests (25+ tests)
+│   └── test_orchestrator.py    # Phase 7: Orchestrator unit tests (49 tests)
 ├── pytest.ini                  # pytest configuration
 ├── .env.example
 ├── .gitignore
@@ -261,4 +294,13 @@ pharma-data-pipeline/
    pytest tests/test_validation.py -v        # validation tests only
    pytest tests/test_build_gold.py -v        # gold layer tests only
    pytest tests/ -v -k "TestAgeValidation"   # run one test class
+   ```
+
+9. **Run Full Orchestrated Pipeline (Phase 7)**:
+   ```powershell
+   python src/orchestrator.py                              # full pipeline (all 6 stages)
+   python src/orchestrator.py --stages gold,test           # selective stages
+   python src/orchestrator.py --name "my_run"              # custom run label
+   python src/orchestrator.py --no-stop-on-failure         # continue on failure
+   python src/orchestrator.py --history                    # view run history
    ```
