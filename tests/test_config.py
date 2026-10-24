@@ -210,6 +210,10 @@ class TestProjectStructure:
         "config/__init__.py",
         "requirements.txt",
         "README.md",
+        "Dockerfile",
+        "docker-compose.yml",
+        ".dockerignore",
+        "scripts/init_db.sql",
     ])
     def test_required_source_file_exists(self, src_file):
         """Each critical source file must exist on disk."""

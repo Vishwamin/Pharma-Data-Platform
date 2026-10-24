@@ -1,0 +1,33 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases and runtime outputs
+*.db
+*.sqlite
+data/*.db
+data/silver/
+data/gold/
+logs/*.log
+!logs/.gitkeep
+
+# Git & IDE metadata
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Docker metadata
+Dockerfile
+docker-compose*.yml
+.dockerignore

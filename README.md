@@ -68,6 +68,14 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
                    │ FastAPI REST API & Streamlit │
                    │  Clinical KPIs, Drug Efficacy│
                    │  Live Observability Hub      │
+                   └──────────────┬───────────────┘
+                                  │
+                                  ▼
+                   ┌──────────────────────────────┐
+                   │ Phase 9: CONTAINER & CI/CD   │
+                   │ Docker & Docker Compose      │
+                   │  PostgreSQL + API + App      │
+                   │  GitHub Actions Automation   │
                    └──────────────────────────────┘
 ```
 
@@ -215,8 +223,34 @@ An end-to-end Medallion-Architecture Data Pipeline built for Clinical Trial Anal
 
 ---
 
+### 🔹 PHASE 9: Production Containerization & CI/CD DataOps Automation
+- **Goal**: Package the entire multi-tier Medallion data engineering platform into production-ready Docker containers and establish an automated CI/CD DataOps pipeline using GitHub Actions.
+- **What We Built**:
+  - `Dockerfile`: Multi-purpose, production-grade container image based on `python:3.11-slim-bullseye` with native compilation libraries (`libpq-dev`, `build-essential`, `curl`), optimized layer caching, non-root paths, and default execution CMD
+  - `docker-compose.yml`: Multi-service container architecture orchestrating 4 services on a shared network (`pharma-network`):
+    - `postgres`: Dedicated PostgreSQL 15 database container with persistent named volume (`postgres_data`) and health check (`pg_isready`)
+    - `pipeline-runner`: Automated Medallion ETL batch runner that waits for healthy database and executes Phase 7 Orchestrator
+    - `api-serving`: FastAPI REST analytics service exposed on port 8000
+    - `dashboard`: Streamlit clinical intelligence web application exposed on port 8501
+  - `.dockerignore`: Comprehensive hygiene rules excluding virtual environments, local SQLite databases, pycache, test caches, and logs
+  - `scripts/init_db.sql`: Database initialization script executed on container startup by PostgreSQL entrypoint
+  - `.github/workflows/pipeline_ci.yml`: Automated GitHub Actions continuous integration workflow:
+    - Triggers on pushes and pull requests to `main` branch
+    - Sets up Ubuntu runner with PostgreSQL 15 service container and Python 3.11
+    - Installs dependencies and runs full 274-test pytest suite
+    - Executes Phase 7 Orchestrator end-to-end against live database
+    - Verifies execution history and archives pipeline execution log artifacts
+  - `tests/test_docker_and_ci.py`: 26 unit tests validating container configurations, compose services, health checks, .dockerignore patterns, and CI workflow specifications
+- **Results**:
+  - Total test suite: **274 tests PASSED, 0 failures**
+
+---
+
 ```
 pharma-data-pipeline/
+├── .github/
+│   └── workflows/
+│       └── pipeline_ci.yml     # Phase 9: GitHub Actions CI/CD workflow
 ├── config/
 │   ├── __init__.py
 │   └── config.py               # Central configuration & DB settings
@@ -233,6 +267,8 @@ pharma-data-pipeline/
 │   └── pharma_clinical_db.db        # Local database storage
 ├── logs/
 │   └── pipeline.log            # Persistent audit logs
+├── scripts/
+│   └── init_db.sql             # Phase 9: PostgreSQL container init script
 ├── sql/
 │   ├── 01_basic_queries.sql
 │   ├── 02_aggregations_and_grouping.sql
@@ -268,13 +304,17 @@ pharma-data-pipeline/
 │   ├── conftest.py             # Shared pytest fixtures & test DB setup
 │   ├── test_validation.py      # Phase 3: Validation engine tests (80+ tests)
 │   ├── test_build_gold.py      # Phase 5: Gold layer function tests (50+ tests)
-│   ├── test_config.py          # Config & project structure tests (25+ tests)
+│   ├── test_config.py          # Config & project structure tests (29 tests)
 │   ├── test_data_ingestion.py  # Raw data ingestion tests (25+ tests)
 │   ├── test_orchestrator.py    # Phase 7: Orchestrator unit tests (49 tests)
-│   └── test_api_serving.py     # Phase 8: FastAPI REST API tests (9 tests)
-├── pytest.ini                  # pytest configuration
+│   ├── test_api_serving.py     # Phase 8: FastAPI REST API tests (9 tests)
+│   └── test_docker_and_ci.py   # Phase 9: Docker & CI/CD workflow tests (26 tests)
+├── .dockerignore               # Phase 9: Docker build exclusion patterns
 ├── .env.example
 ├── .gitignore
+├── Dockerfile                  # Phase 9: Multi-purpose production Dockerfile
+├── docker-compose.yml          # Phase 9: Multi-container orchestration stack
+├── pytest.ini                  # pytest configuration
 ├── README.md                   # Project documentation
 └── requirements.txt            # Python dependencies
 ```
@@ -350,3 +390,24 @@ pharma-data-pipeline/
     ```powershell
     streamlit run src/dashboard.py
     ```
+
+12. **Deploy Full Multi-Container Platform with Docker Compose (Phase 9)**:
+    ```powershell
+    # Build and start all 4 services (PostgreSQL, Orchestrator, API, Dashboard)
+    docker compose up --build -d
+
+    # View logs across all services
+    docker compose logs -f
+
+    # Access Services:
+    # - FastAPI REST API:      http://localhost:8000/docs
+    # - Streamlit Dashboard:   http://localhost:8501
+    # - PostgreSQL Database:   localhost:5432
+
+    # Stop and remove containers and networks
+    docker compose down
+    ```
+
+13. **Automated CI/CD Execution with GitHub Actions (Phase 9)**:
+    - Every `git push` or `pull_request` to the `main` branch automatically triggers `.github/workflows/pipeline_ci.yml`
+    - Spins up an Ubuntu runner with PostgreSQL 15, runs the full 274-test pytest suite, executes the Phase 7 Orchestrator, and uploads pipeline logs as workflow artifacts.

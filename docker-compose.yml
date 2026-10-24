@@ -1,0 +1,117 @@
+# =============================================================================
+# Phase 9: Multi-Container Production Stack (Docker Compose)
+# =============================================================================
+# Services:
+#   1. postgres         - Dedicated PostgreSQL 15 database with persistent volume
+#   2. pipeline-runner  - Executes the full 7-stage Medallion Pipeline Orchestrator
+#   3. api-serving      - FastAPI REST Analytics Service (Port 8000)
+#   4. dashboard        - Streamlit Clinical Intelligence Hub (Port 8501)
+# =============================================================================
+
+version: "3.8"
+
+networks:
+  pharma-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. PostgreSQL Database Service
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: pharma-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pharma_admin
+      POSTGRES_PASSWORD: pharma_pass
+      POSTGRES_DB: pharma_clinical_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharma_admin -d pharma_clinical_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pharma-network
+
+  # ---------------------------------------------------------------------------
+  # 2. Pipeline Runner Service (Phase 7 Orchestrator)
+  # ---------------------------------------------------------------------------
+  pipeline-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pharma-pipeline-runner
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: pharma_clinical_db
+      POSTGRES_USER: pharma_admin
+      POSTGRES_PASSWORD: pharma_pass
+      ENV: production
+    command: ["python", "src/orchestrator.py"]
+    networks:
+      - pharma-network
+
+  # ---------------------------------------------------------------------------
+  # 3. Clinical Data Serving Layer (FastAPI REST Service)
+  # ---------------------------------------------------------------------------
+  api-serving:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pharma-api-serving
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: pharma_clinical_db
+      POSTGRES_USER: pharma_admin
+      POSTGRES_PASSWORD: pharma_pass
+      ENV: production
+    command: ["uvicorn", "src.api_serving:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - pharma-network
+
+  # ---------------------------------------------------------------------------
+  # 4. Clinical Intelligence Dashboard (Streamlit Web UI)
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pharma-dashboard
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: pharma_clinical_db
+      POSTGRES_USER: pharma_admin
+      POSTGRES_PASSWORD: pharma_pass
+      ENV: production
+    command: ["streamlit", "run", "src/dashboard.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+    networks:
+      - pharma-network
