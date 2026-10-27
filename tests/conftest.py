@@ -116,44 +116,93 @@ def setup_test_database():
     """
     Session-level fixture: ensures that all tables (including Gold Star Schema
     and PipelineRun metadata store) exist in the target database.
-    If running against SQLite fallback and tables are empty, seeds minimal
-    records so API and analytical tests pass offline.
+    If the active database is empty (e.g. fresh PostgreSQL service container
+    in CI/CD, or clean local SQLite database), seeds minimal records using
+    SQLAlchemy ORM so API serving and analytical tests pass out-of-the-box.
     """
+    from datetime import date
+    from sqlalchemy import text
+    from sqlalchemy.orm import Session
     from src.database import engine, Base
     from src.models_bronze import BronzeClinicalTrials
     from src.models_quarantine import QuarantineClinicalTrials
     from src.models_silver import SilverClinicalTrials
     from src.models_gold import DimPatient, DimTrial, DimDrug, FactClinicalOutcomes
     from src.models_pipeline_run import PipelineRun
-    from sqlalchemy import text
 
-    # Ensure all tables exist
+    # Ensure all tables exist in target database
     Base.metadata.create_all(bind=engine)
 
-    # Check if fact_clinical_outcomes has data; if empty, seed minimal data
+    # Check if fact_clinical_outcomes has data
     with engine.connect() as conn:
         try:
             count = conn.execute(text("SELECT COUNT(*) FROM fact_clinical_outcomes")).scalar()
         except Exception:
             count = 0
 
-    if "sqlite" in str(engine.url):
-        # Seed minimal dimensions for SQLite fallback if not present
-        with engine.connect() as conn:
-            conn.execute(text("INSERT OR IGNORE INTO dim_patient (patient_key, patient_id, age, gender, country) VALUES (1, 'P1001', 35, 'Male', 'USA')"))
-            conn.execute(text("INSERT OR IGNORE INTO dim_trial (trial_key, trial_id, treatment, start_date, end_date, treatment_duration_days) VALUES (1, 'CT-101', 'Drug_A_10mg', '2023-01-01', '2023-04-01', 90)"))
-            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (1, 'DRUG-1', 'Investigational Drug Alpha')"))
-            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (2, 'DRUG-2', 'Investigational Drug Beta')"))
-            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (3, 'DRUG-3', 'Investigational Drug Gamma')"))
-            conn.execute(text("INSERT OR IGNORE INTO dim_drug (drug_key, drug_id, drug_name) VALUES (4, 'DRUG-4', 'Investigational Drug Delta')"))
-            conn.execute(text(
-                "INSERT OR IGNORE INTO fact_clinical_outcomes "
-                "(fact_id, patient_key, trial_key, drug_key, patient_id, trial_id, drug_id, dosage, treatment_duration_days, outcome, outcome_binary, outcome_category) "
-                "VALUES (1, 1, 1, 1, 'P1001', 'CT-101', 'DRUG-1', 100.0, 90, 'Completed', 1, 'Positive')"
-            ))
-            conn.execute(text(
-                "INSERT OR IGNORE INTO pipeline_runs "
-                "(run_id, run_name, status, triggered_by, duration_seconds) "
-                "VALUES (1, 'test_initial_run', 'SUCCESS', 'test', 5.0)"
-            ))
-            conn.commit()
+    if count == 0:
+        # Seed test records using ORM (works across PostgreSQL and SQLite)
+        with Session(engine) as session:
+            # Seed patient dimension
+            p = session.query(DimPatient).filter_by(patient_id="P1001").first()
+            if not p:
+                p = DimPatient(patient_key=1, patient_id="P1001", age=35, gender="Male", country="USA")
+                session.add(p)
+
+            # Seed trial dimension
+            t = session.query(DimTrial).filter_by(trial_id="CT-101").first()
+            if not t:
+                t = DimTrial(
+                    trial_key=1,
+                    trial_id="CT-101",
+                    treatment="Drug_A_10mg",
+                    start_date=date(2023, 1, 1),
+                    end_date=date(2023, 4, 1),
+                    treatment_duration_days=90,
+                )
+                session.add(t)
+
+            # Seed drug dimension (all 4 drugs)
+            drugs_to_seed = [
+                (1, "DRUG-1", "Investigational Drug Alpha"),
+                (2, "DRUG-2", "Investigational Drug Beta"),
+                (3, "DRUG-3", "Investigational Drug Gamma"),
+                (4, "DRUG-4", "Investigational Drug Delta"),
+            ]
+            for d_key, d_id, d_name in drugs_to_seed:
+                d = session.query(DimDrug).filter_by(drug_id=d_id).first()
+                if not d:
+                    session.add(DimDrug(drug_key=d_key, drug_id=d_id, drug_name=d_name))
+
+            session.flush()
+
+            # Seed fact table
+            fact = session.query(FactClinicalOutcomes).filter_by(fact_id=1).first()
+            if not fact:
+                session.add(FactClinicalOutcomes(
+                    fact_id=1,
+                    patient_key=p.patient_key,
+                    trial_key=t.trial_key,
+                    drug_key=1,
+                    patient_id="P1001",
+                    trial_id="CT-101",
+                    drug_id="DRUG-1",
+                    dosage=100.0,
+                    treatment_duration_days=90,
+                    outcome="Completed",
+                    outcome_binary=1,
+                    outcome_category="Positive",
+                ))
+
+            # Seed pipeline run
+            run = session.query(PipelineRun).filter_by(run_id=1).first()
+            if not run:
+                session.add(PipelineRun(
+                    run_id=1,
+                    run_name="test_initial_run",
+                    status="SUCCESS",
+                    triggered_by="test",
+                    duration_seconds=5.0,
+                ))
+
+            session.commit()
